@@ -43,6 +43,10 @@ args = parser.parse_args()
 print (f'parsing {args.ris_file} ...')
 ris_file_path = Path(args.ris_file).absolute()
 
+
+# counters
+inc_ct = exc_ct = lbl_ct = 0
+
 with open(ris_file_path, 'r', ) as bibliography_file:
     ris_entries = rispy.load(bibliography_file, skip_unknown_tags=False)
     print (f'found {len(ris_entries)} bibliographies at {ris_file_path}')
@@ -51,18 +55,25 @@ with open(ris_file_path, 'r', ) as bibliography_file:
         print(f'processing title "{ris_entry["title"]}"')
         ris_entry['notes'] = adjust_rayyan_tags(ris_entry['notes'])
 
+        # counting tags
+        for note in ris_entry['notes']:
+                    if note.startswith('INCLUSION:'):             inc_ct +=1
+                    if note.startswith('EXCLUSION-REASONS:'):     exc_ct +=1
+                    if note.startswith('LABELS:'):                lbl_ct +=1
+
+    print (f'found \n\tINCLUSIONS={inc_ct}\n\tEXCLUSIONS={exc_ct}\n\tLABELS={lbl_ct}')
+
+
 
 # adjusting inputed file name extension
 result_file = f'{re.sub("[^.]+$","", args.ris_file)}parsed.{"json" if args.json else "ris"}'
 
 result_path = Path(result_file).absolute()
 print (f'saving {len(ris_entries)} entries at {result_file} ')
-
 if args.json:
     write_json(ris_entries, result_path)
 else:
     write_ris(ris_entries, result_path)
-
 
 
 
