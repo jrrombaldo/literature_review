@@ -21,7 +21,9 @@ def adjust_rayyan_tags(notes):
     notes_new =[]
     for note in notes:
         if "RAYYAN-" in note:
-            for part in note.split("RAYYAN-"): notes_new.append(part.lstrip())
+            for part in note.split("RAYYAN-"): 
+                if len(part.lstrip())>0:
+                    notes_new.append(part.lstrip())
         else:
             notes_new.append(note)
         
