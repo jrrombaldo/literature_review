@@ -11,12 +11,13 @@ import webbrowser
 from scholarly import scholarly
 from scholarly import ProxyGenerator
 import logging 
+from multiprocessing import Pool
+import threading
 
-
-
-FORMAT = '%(asctime)s  %(levelname)s - %(message)s'
-logging.basicConfig(format=FORMAT, level="INFO")
+logging.basicConfig(format='%(asctime)s  %(levelname)s  %(threadName)-40s   - %(message)s')
+logging.getLogger().setLevel(logging.WARN) # disable imported module logs
 log = logging.getLogger('literature_review')
+log.setLevel(logging.DEBUG)
 
 
 def write_file (content, file_name):
@@ -32,6 +33,18 @@ def write_ris(content, file_name):
 def list_titles_from_ris(ris_file):
     ris_entries = rispy.load(ris_file, skip_unknown_tags=False)
     return [ ris_entry["title"] for ris_entry in ris_entries]
+
+
+def list_titles_without_pdf_from_ris(ris_file):
+    ris_entries = rispy.load(ris_file, skip_unknown_tags=False)
+    studies_with_pdf = []
+    for ris_entry in ris_entries:
+        for i in range(1,10):
+            if f'file_attachments{i}' in ris_entry and 'pdf' in ris_entry[f'file_attachments{i}'].lower():
+                studies_with_pdf.append(ris_entry['title'])
+
+    studies_titles = [ ris_entry["title"] for ris_entry in ris_entries]
+    return studies_titles.remove(studies_with_pdf)
 
 def open_browser(article_url):
     chrome_path = "open -a /Applications/Chromium.app/ %s"
@@ -65,24 +78,35 @@ def find_study_url_on_google_scholar(study_title):
     else: return None
 
 
+def scholar_thread(study_title):
+    threading.current_thread().name = study_title[:37]+"..."
+
+    start = timeit.default_timer()
+    log.info (f'searching url for {study_title}')
+    title_url = find_study_url_on_google_scholar(study_title)
+
+    if title_url:
+        log.info(f'opening browser, found [{title_url}] for {study_title}')
+        open_browser(title_url)
+    else:
+        log.error(f'UTL not found for study {study_title}')
+
+
+
 
 def find_studies_url_and_open_browser(ris_file):
     titles = list_titles_from_ris(ris_file)
 
-    for title in titles:
-        start = timeit.default_timer()
+    chunk_size = 50
+    for chunk_of_titles in [titles[offs:offs+chunk_size] for offs in range(0, len(titles), chunk_size)]:
+        input(f"Press Enter to proccess a chunk of ({len(chunk_of_titles)}) studies")
+        # log.debug(f'processing a chunk of studies, size {len(chunk_of_titles)}')
 
-        log.info (f'searching url for {title}')
-        title_url = find_study_url_on_google_scholar(title)
-
-        if title_url:
-            log.info(f'opening browser, found [{title_url}] for {title}')
-            open_browser(title_url)
-        else:
-            log.error(f'UTL not found for study {title}')
+        with Pool(chunk_size) as scholar_pool:
+            scholar_pool.map(scholar_thread, chunk_of_titles)
 
 
-def do_something(ris_file, is_json):
+def parse_rayyan_metadata(ris_file, is_json):
     log.debug (f'parsing {ris_file.name} ...')
 
     # counters
@@ -93,13 +117,16 @@ def do_something(ris_file, is_json):
 
     for ris_entry in ris_entries:
         log.debug(f'processing study "{ris_entry["title"]}"')
-        ris_entry['notes'] = adjust_rayyan_tags(ris_entry['notes'])
+        if 'notes' in ris_entry:
+            ris_entry['notes'] = adjust_rayyan_tags(ris_entry['notes'])
 
-        # counting tags
-        for note in ris_entry['notes']:
-                    if note.startswith('INCLUSION:'):             inc_ct +=1
-                    if note.startswith('EXCLUSION-REASONS:'):     exc_ct +=1
-                    if note.startswith('LABELS:'):                lbl_ct +=1
+            # counting tags
+            for note in ris_entry['notes']:
+                        if note.startswith('INCLUSION:'):             inc_ct +=1
+                        if note.startswith('EXCLUSION-REASONS:'):     exc_ct +=1
+                        if note.startswith('LABELS:'):                lbl_ct +=1
+        else:
+            log.debug(f'noteless study {ris_entry["title"]}')
 
     log.info (f'\n\nfound \n\tINCLUSIONS={inc_ct}\n\tEXCLUSIONS={exc_ct}\n\tLABELS={lbl_ct}')
 
@@ -160,20 +187,21 @@ def parse_cli_args():
     return args
 
 
+
 if __name__ == "__main__":
     args = parse_cli_args()
 
     
-
     if args.script == "ris":
         [log.info(title) for title in list_titles_from_ris(args.ris_file)]
 
     if args.script =="rayyan":
-        do_something(args.ris_file, args.json)
+        parse_rayyan_metadata(args.ris_file, args.json)
 
     if args.script =="scholar":
         find_studies_url_and_open_browser(args.ris_file)
-        
+        # [print (t) for t in list_titles_without_pdf_from_ris(args.ris_file)]
+
 
 
 
