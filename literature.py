@@ -13,6 +13,9 @@ from scholarly import ProxyGenerator
 import logging 
 from multiprocessing import Pool
 import threading
+import os
+import shutil
+from datetime import datetime
 
 logging.basicConfig(format='%(asctime)s  %(levelname)s  - %(message)s')
 logging.getLogger().setLevel(logging.WARN) # disable imported module logs
@@ -47,9 +50,7 @@ class utils():
                     studies_with_pdf.append(ris_entry['title'])
 
         studies_titles = [ ris_entry["title"] for ris_entry in ris_entries]
-        studies_without_pdf = studies_titles.remove(studies_with_pdf)
-        studies_without_pdf.sort()
-        return studies_without_pdf
+        return sorted(set(studies_titles).difference(set(studies_with_pdf)))
 
     def diff(ris_a, ris_b):
         studies_a = set(utils.list_studies_title_from_ris(ris_a))
@@ -58,14 +59,25 @@ class utils():
         print (f'found {len(studies_a)} studies in {ris_a.name} and {len(studies_b)} studies in {ris_b.name}')
 
         print (f'\n\nstudies in {ris_a.name} and NOT in {ris_b.name}\n\n')
-        [ print (study) for study in studies_a.difference(studies_b)] 
+        [ print (study) for study in sorted(studies_a.difference(studies_b))] 
             
         print (f'\n\nstudies in {ris_b.name} and NOT in {ris_a.name}\n\n')
-        [ print (study) for study in studies_b.difference(studies_a)] 
+        [ print (study) for study in sorted(studies_b.difference(studies_a))] 
             
     def open_browser(article_url):
         chrome_path = f"open -a /Applications/Chromium.app/ %s"
         webbrowser.get(chrome_path).open(article_url)
+
+    def split_RIS(ris_file, chunk_size):
+        ris_entries = rispy.load(ris_file, skip_unknown_tags=False)
+        ct = 0
+        for chunk in [ris_entries[offs:offs+chunk_size] for offs in range(0, len(ris_entries), chunk_size)]:
+            ct += 1
+            result_file = f'{re.sub("[^.]+$","", ris_file.name)}-part{ct}.ris'
+            print (result_file, len(chunk))
+            utils.write_ris(chunk, result_file)
+        
+
 
 
 
@@ -216,6 +228,38 @@ def parse_cli_args():
         type=argparse.FileType('r'),
         help='RIS file containing studies')
 
+# Zotero
+    zotero = subparsers.add_parser('zotero', help='find differences between ris files')
+
+    zotero_dir = str(Path.home())+os.sep+"Zotero"
+    zotero.add_argument('--zotero-dir', 
+        metavar='   Zotero library folder', 
+        action='store',
+        default=zotero_dir,
+        type=str,
+        help=f'default {zotero_dir}')
+
+    zip_file = datetime.now().strftime("./%Y-%m-%d_%H-%M-%S")
+    zotero.add_argument('--destination',
+        metavar='  Where to save the file', 
+        action='store',
+        default=zip_file,
+        type=str,
+        help=f'default {zip_file}')
+
+# split RIS
+    split_parser = subparsers.add_parser('split', help='takes a RIS and split it into smaller chunks')
+    split_parser.add_argument('ris_file', 
+        metavar='RIS_file', 
+        type=argparse.FileType('r'),
+        help='RIS file containing studies')
+    split_parser.add_argument('--chunk', 
+        metavar='chunnk_size', 
+        action='store',
+        type=int,
+        default=10,
+        help='number of studies to proccess per time (Default: 10)')
+
 
     args = parser.parse_args()
     return args
@@ -236,6 +280,13 @@ if __name__ == "__main__":
 
     if args.script =="diff":
         utils.diff(args.ris_file_a, args.ris_file_b)
+
+    if args.script =="zotero":
+        shutil.make_archive(args.destination,'zip',args.zotero_dir, verbose=1)
+
+    if args.script =="split":
+        utils.split_RIS(args.ris_file, args.chunk)
+        
 
 
 
