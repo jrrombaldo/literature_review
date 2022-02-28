@@ -270,7 +270,7 @@ if __name__ == "__main__":
     args = parse_cli_args()
 
     if args.script == "ris":
-        [log.info(title) for title in utils.list_studies_title_from_ris(args.ris_file)]
+        [print(title) for title in utils.list_studies_title_from_ris(args.ris_file)]
 
     if args.script =="rayyan":
         rayyan.parse_rayyan_metadata(args.ris_file, args.json)
