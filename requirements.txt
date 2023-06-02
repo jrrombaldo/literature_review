@@ -9,7 +9,7 @@ bibtexparser==1.2.0
 certifi==2021.10.8
 cffi==1.15.0
 charset-normalizer==2.0.10
-cryptography==36.0.1
+cryptography==41.0.0
 Deprecated==1.2.13
 docutils==0.17.1
 fake-useragent==0.1.11
